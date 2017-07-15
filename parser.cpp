@@ -4,7 +4,7 @@
 #pragma warning(disable:4146)
 #pragma warning(disable:4291)
 
-
+#if 0
 #pragma comment(lib, "LLVMSupport.lib")
 #pragma comment(lib, "LLVMMC.lib")
 #pragma comment(lib, "LLVMMCParser.lib")
@@ -53,6 +53,7 @@
 #pragma comment(lib, "clangParse.lib")
 #pragma comment(lib, "clangDriver.lib")
 #pragma comment(lib, "clangCodeGen.lib")
+#endif 
 
 #pragma comment(lib, "Mincore.lib")
 #pragma comment(lib, "version.lib")
@@ -551,7 +552,7 @@ static const char * getFileNameForDecl(const clang::Decl * decl, clang::SourceMa
 	if (!fileEntry) {
 		return 0;
 	}
-	return fileEntry->getName();
+	return fileEntry->getName().str().c_str();
 }
 
 void copyLower(char* dest, const char* source)
@@ -856,7 +857,7 @@ int main(int argc, const char **argv, char * const *envp)
 
 	// Create a compiler instance to handle the actual work.
 	CompilerInstance Clang;
-	Clang.setInvocation(CI.release());
+	Clang.setInvocation(std::move(CI));
 
 	// Create the compilers actual diagnostics engine.
 	Clang.createDiagnostics();
