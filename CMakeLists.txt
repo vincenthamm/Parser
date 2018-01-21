@@ -13,7 +13,7 @@ option(CLANG_BUILD_TESTS FALSE)
 option(CLANG_INCLUDE_TESTS FALSE)
 option(CLANG_BUILD_DOCS FALSE)
 
-set(LLVM_TARGETS_TO_BUILD "X86")
+set(LLVM_TARGETS_TO_BUILD "PowerPC")
 set(LLVM_EXTERNAL_CLANG_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/clang)
 
 MESSAGE( STATUS "$LLVM_EXTERNAL_CLANG_SOURCE_DIR:         " ${LLVM_EXTERNAL_CLANG_SOURCE_DIR} )
@@ -33,7 +33,8 @@ include_directories("${CMAKE_CURRENT_BINARY_DIR}/llvm/tools/clang/include")
 
 add_executable(parser "parser.cpp")
 
-llvm_map_components_to_libnames(llvm_libs support core irreader MCJIT)
+#llvm_map_components_to_libnames(llvm_libs support core irreader MCJIT)
+llvm_map_components_to_libnames(llvm_libs MCJIT)
 
 set(CLANG_LIBS clangFrontend  clangSerialization clangDriver clangParse clangRewriteFrontend clangStaticAnalyzerFrontend clangSema)
 set(CLANG_LIBS ${CLANG_LIBS} clangAnalysis clangEdit clangAST clangLex clangBasic clangTooling )
@@ -41,5 +42,6 @@ set(CLANG_LIBS ${CLANG_LIBS} clangAnalysis clangEdit clangAST clangLex clangBasi
 
 MESSAGE(STATUS "Clang libs: " ${CLANG_LIBS})
 
-target_link_libraries(parser ${llvm_libs} ${CLANG_LIBS})
+#target_link_libraries(parser ${llvm_libs} ${CLANG_LIBS})
+target_link_libraries(parser clangFrontend ${llvm_libs})
 

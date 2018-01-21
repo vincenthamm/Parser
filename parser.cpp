@@ -536,23 +536,35 @@ void writeType(FILE* fOutput, c_typeDescription* typeDescription)
 	fprintf(fOutput, " // %s", typeDescription->m_qualifiedType.getAsString().c_str());
 }
 
-static const clang::FileEntry * getFileEntryForDecl(const clang::Decl * decl, clang::SourceManager * sourceManager)
+static const std::string getFileNameForDecl(const clang::Decl * decl, clang::SourceManager * sourceManager)
 {
-	if (!decl || !sourceManager) {
-		return 0;
-	}
-	clang::SourceLocation sLoc = decl->getLocation();
-	clang::FileID fileID = sourceManager->getFileID(sLoc);
-	return sourceManager->getFileEntryForID(fileID);
-}
+	FileID fileId = sourceManager->getFileID(decl->getLocation());
+	const SrcMgr::SLocEntry &Entry = sourceManager->getSLocEntry(fileId);
 
-static const char * getFileNameForDecl(const clang::Decl * decl, clang::SourceManager * sourceManager)
-{
-	const clang::FileEntry * fileEntry = getFileEntryForDecl(decl, sourceManager);
-	if (!fileEntry) {
-		return 0;
+	if (Entry.isFile())
+	{
+		const SrcMgr::ContentCache *Content = Entry.getFile().getContentCache();
+		return Content->OrigEntry->getName();
 	}
-	return fileEntry->getName().str().c_str();
+
+	if (Entry.isExpansion())
+	{
+		return std::string();
+		/*
+		const clang::SrcMgr::ExpansionInfo expansion = Entry.getExpansion();
+
+		FileID fileId = sourceManager->getFileID(expansion.getSpellingLoc());
+		const SrcMgr::SLocEntry &Entry = sourceManager->getSLocEntry(fileId);
+
+		if (Entry.isFile())
+		{
+			const SrcMgr::ContentCache *Content = Entry.getFile().getContentCache();
+			return Content->OrigEntry->getName();
+		}
+		*/
+	}
+
+	return std::string();
 }
 
 void copyLower(char* dest, const char* source)
@@ -595,6 +607,9 @@ public:
 			// If it is a class/struct/union
 			if (const CXXRecordDecl *CXXdecl = dyn_cast<CXXRecordDecl>(D))
 			{
+				if (!shouldSchematize(CXXdecl))
+					break;
+
 				const NamedDecl* pNamedDeclaration = dyn_cast<NamedDecl>(D);
 				std::string name;
 				if (pNamedDeclaration)
@@ -602,17 +617,14 @@ public:
 					name = pNamedDeclaration->getNameAsString();
 				}
 
-				const char* fileName = getFileNameForDecl(*I, m_sourceManager);
-
-				if (!shouldSchematize(CXXdecl))
-					break;
+				std::string fileName = getFileNameForDecl(*I, m_sourceManager);
 
 				c_schematizedClass* pNewSchema = new c_schematizedClass;
 				g_schematizedClass.push_back(pNewSchema);
 				pNewSchema->m_name = name.c_str();
 
 				// is this declaration part of the path we care about?
-				if (IsInPath(fileName, currentPath))
+				if ((fileName.length() == 0) || IsInPath(fileName.c_str(), currentPath))
 				{
 					pNewSchema->m_shouldDump = true;
 				}
@@ -706,7 +718,15 @@ public:
 
 int main(int argc, const char **argv, char * const *envp)
 {
+	if (argc < 3)
+		return 0;
+
 	_getcwd(currentPath, CWD_MAX);
+
+	while (char* pCharacter = strchr(currentPath, '\\'))
+	{
+		*pCharacter = '/';
+	}
 
 	void *MainAddr = (void*)(intptr_t)GetExecutablePath;
 	std::string Path = GetExecutablePath(argv[0]);
@@ -764,27 +784,25 @@ int main(int argc, const char **argv, char * const *envp)
 			decodeIncludePath = NULL;
 		}
 
-		if (strstr(currentDecodeIncudePath, "Program Files"))
+		if (strlen(currentDecodeIncudePath))
 		{
-			if (char* visualVersion = strstr(currentDecodeIncudePath, "14.0"))
+/*			if (strstr(currentDecodeIncudePath, "Program Files"))
 			{
-				visualVersion[1] = '2';
+				if (char* visualVersion = strstr(currentDecodeIncudePath, "14.0"))
+				{
+					visualVersion[1] = '2';
+				}
+				strcpy(includePathBuffer[numUsedIncludes], "-isystem");
 			}
-			strcpy(includePathBuffer[numUsedIncludes], "-isystem");
-		}
-		else
-		{
-			strcpy(includePathBuffer[numUsedIncludes], "-I");
-		}
+			else*/
+			{
+				strcpy(includePathBuffer[numUsedIncludes], "-I");
+			}
 
-		strcat(includePathBuffer[numUsedIncludes], currentDecodeIncudePath);
+			strcat(includePathBuffer[numUsedIncludes], currentDecodeIncudePath);
 
-		if (strlen(includePathBuffer[numUsedIncludes]))
-		{
-			Args.push_back(includePathBuffer[numUsedIncludes]);
+			Args.push_back(includePathBuffer[numUsedIncludes++]);
 		}
-
-		numUsedIncludes++;
 	}
 
 
@@ -795,10 +813,13 @@ int main(int argc, const char **argv, char * const *envp)
 	printf("include: %s\n", argv[3]);
 	*/
 	Args.push_back("-fsyntax-only");
-
-	Args.push_back("-fms-compatibility-version=19.00");
+	Args.push_back("-nostdlibinc");
+	Args.push_back("-fdelayed-template-parsing");
+	Args.push_back("-fms-compatibility-version=19.10");
 
 	// Ignore warnings due to include windows headers
+	Args.push_back("-Wno-ignored-pragma-intrinsic");
+	Args.push_back("-Wno-nonportable-include-path");
 	Args.push_back("-Wno-ignored-attributes");
 	Args.push_back("-Wno-microsoft");
 	Args.push_back("-Wno-unused-value");
